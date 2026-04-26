@@ -1,0 +1,829 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Infinite Chess Mate Notebook</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #ffffff;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --line: #d1d5db;
+      --dark: #111827;
+      --accent: #2563eb;
+      --cell: 36px;
+      --board-size: 3600px;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    button, input, select, textarea { font: inherit; }
+    button {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--ink);
+      padding: 9px 11px;
+      min-height: 40px;
+      touch-action: manipulation;
+    }
+    button.active { background: var(--dark); color: white; border-color: var(--dark); }
+    button.danger { color: #b91c1c; }
+    input, select, textarea {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+      padding: 8px 10px;
+    }
+    .app {
+      height: 100%;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 8px;
+      padding: 8px;
+    }
+    .toolbar, .bottom, .pages {
+      background: rgba(255,255,255,.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      overflow-x: auto;
+      padding: 8px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .toolbar .title {
+      font-weight: 800;
+      white-space: nowrap;
+      padding: 0 4px;
+    }
+    .toolbar select, .toolbar input { min-height: 40px; max-width: 105px; }
+    .stage {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #cfcfcf;
+      touch-action: none;
+    }
+    .board-wrap {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: var(--board-size);
+      height: var(--board-size);
+      transform-origin: 0 0;
+    }
+    .board {
+      position: absolute;
+      inset: 0;
+      width: var(--board-size);
+      height: var(--board-size);
+      background-color: #fbfaf7;
+      background-image:
+        linear-gradient(45deg, #efe7d8 25%, transparent 25%),
+        linear-gradient(-45deg, #efe7d8 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #efe7d8 75%),
+        linear-gradient(-45deg, transparent 75%, #efe7d8 75%);
+      background-size: calc(var(--cell) * 2) calc(var(--cell) * 2);
+      background-position: 0 0, 0 var(--cell), var(--cell) calc(-1 * var(--cell)), calc(-1 * var(--cell)) 0;
+      border: 2px solid #444;
+    }
+    .grid-line-v, .grid-line-h { position: absolute; background: rgba(0,0,0,.20); pointer-events: none; }
+    .grid-line-v { top: 0; width: 1px; height: var(--board-size); }
+    .grid-line-h { left: 0; height: 1px; width: var(--board-size); }
+    .highlight {
+      position: absolute;
+      width: var(--cell);
+      height: var(--cell);
+      border: 2px solid transparent;
+    }
+    .highlight.selected, .label.selected, .piece.selected { outline: 3px solid #ef4444; outline-offset: 0; }
+    .piece {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      margin: 3px;
+      border: 2px solid #111827;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: white;
+      font-weight: 900;
+      font-size: 15px;
+      letter-spacing: -0.5px;
+      user-select: none;
+      touch-action: none;
+      box-shadow: 0 1px 5px rgba(0,0,0,.24);
+    }
+    .piece.black { background: #111827; color: white; border-color: white; }
+    .piece.white { color: #1d4ed8; }
+    .label {
+      position: absolute;
+      min-width: 24px;
+      max-width: 180px;
+      padding: 4px 7px;
+      border-radius: 8px;
+      background: rgba(255,255,255,.94);
+      border: 1px solid var(--line);
+      box-shadow: 0 1px 6px rgba(0,0,0,.12);
+      font-size: 13px;
+      white-space: pre-wrap;
+      user-select: none;
+    }
+    .arrow-hit {
+      position: absolute;
+      width: 26px;
+      height: 26px;
+      margin: -13px;
+      border-radius: 999px;
+      background: transparent;
+    }
+    .arrow-hit.selected { background: rgba(239,68,68,.65); }
+    .arrow-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .status {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      padding: 6px 9px;
+      border-radius: 999px;
+      background: rgba(17, 24, 39, .82);
+      color: white;
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .pages {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .page-tab {
+      white-space: nowrap;
+      max-width: 150px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-inline: 12px;
+    }
+    .bottom {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      padding: 8px;
+    }
+    .bottom-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      overflow-x: auto;
+    }
+    textarea {
+      width: 100%;
+      min-height: 88px;
+      max-height: 28vh;
+      resize: vertical;
+      line-height: 1.45;
+    }
+    .small { font-size: 12px; color: var(--muted); }
+    .piece-note {
+      min-width: 230px;
+      max-width: 520px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      background: #f9fafb;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      white-space: normal;
+    }
+    .hidden { display: none; }
+    @media (min-width: 900px) {
+      .app { grid-template-rows: auto 1fr 180px; }
+      .bottom {
+        grid-template-columns: 230px 1fr;
+      }
+      textarea { height: 100%; max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="toolbar" id="toolbar">
+      <div class="title">Infinite Chess Mate Notebook</div>
+      <button data-tool="select" class="active">선택</button>
+      <button data-tool="pan">이동</button>
+      <button data-tool="piece">기물</button>
+      <select id="pieceType" title="기물">
+        <option value="K">K — White King</option>
+        <option value="k">k — Black King</option>
+        <option value="Q">Q — Queen</option>
+        <option value="R">R — Rook</option>
+        <option value="B">B — Bishop</option>
+        <option value="N">N — Knight</option>
+        <option value="P">P — White Pawn</option>
+        <option value="p">p — Black Pawn</option>
+        <option value="C">C — Chancellor</option>
+        <option value="A">A — Archbishop</option>
+        <option value="Am">Am — Amazon</option>
+        <option value="G">G — Guard</option>
+        <option value="H" selected>H — Hawk</option>
+        <option value="Ct">Ct — Centaur</option>
+        <option value="NR">NR — Knightrider</option>
+        <option value="Hu">Hu — Huygen</option>
+        <option value="X">X — Blocker/Marker</option>
+      </select>
+      <div id="pieceInfo" class="piece-note" aria-live="polite"></div>
+      <button data-tool="highlight">색칠</button>
+      <select id="colorType" title="색상">
+        <option value="rgba(239, 68, 68, 0.48)">빨강</option>
+        <option value="rgba(59, 130, 246, 0.45)">파랑</option>
+        <option value="rgba(250, 204, 21, 0.52)">노랑</option>
+        <option value="rgba(34, 197, 94, 0.45)">초록</option>
+        <option value="rgba(168, 85, 247, 0.45)">보라</option>
+      </select>
+      <button data-tool="arrow">화살표</button>
+      <button data-tool="label">라벨</button>
+      <input id="labelText" value="note" aria-label="라벨 텍스트" />
+      <button id="zoomIn">+</button>
+      <button id="zoomOut">−</button>
+      <button id="deleteItem" class="danger">선택삭제</button>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="board-wrap" id="boardWrap">
+        <div class="board" id="board"></div>
+        <svg class="arrow-layer" id="arrowLayer" width="3600" height="3600" viewBox="0 0 3600 3600">
+          <defs>
+            <marker id="arrowHead" markerWidth="11" markerHeight="11" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+              <path d="M0,0 L0,7 L10,3.5 z" fill="#111827"></path>
+            </marker>
+          </defs>
+        </svg>
+        <div id="overlay"></div>
+      </div>
+      <div class="status" id="status">선택 모드</div>
+    </div>
+
+    <div class="bottom">
+      <div>
+        <div class="bottom-row">
+          <button id="newPage">페이지+</button>
+          <button id="copyPage">복제</button>
+          <button id="deletePage" class="danger">페이지삭제</button>
+          <button id="exportJson">JSON 저장</button>
+          <button id="importJson">JSON 불러오기</button>
+          <input id="fileInput" class="hidden" type="file" accept="application/json" />
+        </div>
+        <div class="pages" id="pages"></div>
+        <input id="pageTitle" style="width:100%; margin-top:6px;" />
+        <div class="small" style="margin-top:6px;">
+          자동 저장: 이 브라우저 안에 저장됩니다. 중요한 노트는 JSON 저장으로 백업하세요.
+        </div>
+      </div>
+      <textarea id="description" placeholder="체크메이트 패턴, 강제 수순, 각 기물의 역할, 통제 칸 등을 적어두세요."></textarea>
+    </div>
+  </div>
+
+<script>
+(() => {
+  "use strict";
+
+  const BOARD = 100;
+  const CELL = 36;
+  const STORAGE_KEY = "infinite_chess_mate_notebook_v1";
+
+  const PIECE_DEFS = {
+    K: "King: 한 칸 이동. 일반 킹.",
+    k: "Black King: 체크메이트 대상.",
+    Q: "Queen: 룩+비숍.",
+    R: "Rook: 가로/세로 직선 이동.",
+    B: "Bishop: 대각선 직선 이동.",
+    N: "Knight: 일반 나이트 점프.",
+    P: "White Pawn: 표기용. 이동 시뮬레이션은 하지 않음.",
+    p: "Black Pawn: 표기용. 이동 시뮬레이션은 하지 않음.",
+    C: "Chancellor: Knight + Rook.",
+    A: "Archbishop: Knight + Bishop.",
+    Am: "Amazon: Knight + Queen.",
+    G: "Guard: King처럼 한 칸 이동하지만 check/checkmate의 대상이 아님.",
+    H: "Hawk: 가로·세로·대각선 8방향으로 정확히 2칸 또는 3칸 점프.",
+    Ct: "Centaur: Knight + Guard.",
+    NR: "Knightrider: 나이트 방향 하나를 정해, 막히기 전까지 같은 나이트 점프를 반복.",
+    Hu: "Huygen: 가로/세로 4방향으로 소수 거리만큼 점프/홉. 장애물 전까지.",
+    X: "Blocker/Marker: 장애물, 핵심 칸, 임시 표식 등으로 사용."
+  };
+
+  const PIECE_NAMES = {
+    C: "Chancellor", A: "Archbishop", Am: "Amazon", G: "Guard", H: "Hawk", Ct: "Centaur", NR: "Knightrider", Hu: "Huygen"
+  };
+
+  const blackPiece = t => t === "k" || t === "p";
+
+  const els = {
+    toolbar: document.getElementById("toolbar"),
+    stage: document.getElementById("stage"),
+    boardWrap: document.getElementById("boardWrap"),
+    board: document.getElementById("board"),
+    overlay: document.getElementById("overlay"),
+    arrowLayer: document.getElementById("arrowLayer"),
+    status: document.getElementById("status"),
+    pieceType: document.getElementById("pieceType"),
+    pieceInfo: document.getElementById("pieceInfo"),
+    colorType: document.getElementById("colorType"),
+    labelText: document.getElementById("labelText"),
+    pages: document.getElementById("pages"),
+    pageTitle: document.getElementById("pageTitle"),
+    description: document.getElementById("description"),
+    fileInput: document.getElementById("fileInput")
+  };
+
+  const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const center = c => (c + 0.5) * CELL;
+  const coordText = (x, y) => `(${x - 50}, ${50 - y})`;
+  function makePage(n) {
+    return {
+      id: uid(),
+      title: `Pattern ${n}`,
+      description: "",
+      pieces: [
+        { id: uid(), type: "k", x: 50, y: 50 },
+        { id: uid(), type: "K", x: 52, y: 50 }
+      ],
+      highlights: [],
+      arrows: [],
+      labels: []
+    };
+  }
+
+  let state = load() || {
+    pages: [makePage(1)],
+    pageIndex: 0,
+    tool: "select",
+    zoom: 0.72,
+    pan: { x: -1170, y: -1330 },
+    selected: null,
+    arrowStart: null
+  };
+
+  let pointer = {
+    pan: null,
+    pieceId: null
+  };
+
+  function page() { return state.pages[state.pageIndex]; }
+
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      pages: state.pages,
+      pageIndex: state.pageIndex,
+      zoom: state.zoom,
+      pan: state.pan
+    }));
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data.pages)) return null;
+      return {
+        pages: data.pages,
+        pageIndex: clamp(data.pageIndex || 0, 0, data.pages.length - 1),
+        tool: "select",
+        zoom: data.zoom || 0.72,
+        pan: data.pan || { x: -1170, y: -1330 },
+        selected: null,
+        arrowStart: null
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function renderGridOnce() {
+    let html = "";
+    for (let i = 0; i <= BOARD; i++) {
+      html += `<div class="grid-line-v" style="left:${i * CELL}px"></div>`;
+      html += `<div class="grid-line-h" style="top:${i * CELL}px"></div>`;
+    }
+    els.board.innerHTML = html;
+  }
+
+  function setTransform() {
+    els.boardWrap.style.transform = `translate(${state.pan.x}px, ${state.pan.y}px) scale(${state.zoom})`;
+  }
+
+  function renderToolbar() {
+    document.querySelectorAll("[data-tool]").forEach(b => {
+      b.classList.toggle("active", b.dataset.tool === state.tool);
+    });
+    const msg = {
+      select: "선택 모드: 기물 드래그, 요소 선택",
+      pan: "이동 모드: 판을 끌어 이동",
+      piece: "기물 모드: 칸을 탭해 기물 배치",
+      highlight: "색칠 모드: 칸을 탭해 색칠/해제",
+      arrow: state.arrowStart ? `화살표 끝 칸 선택 중: ${coordText(state.arrowStart.x, state.arrowStart.y)}` : "화살표 모드: 시작 칸 → 끝 칸",
+      label: "라벨 모드: 칸을 탭해 라벨 배치"
+    };
+    els.status.textContent = msg[state.tool] || "";
+    if (els.pieceInfo) els.pieceInfo.textContent = PIECE_DEFS[els.pieceType.value] || "";
+  }
+
+  function renderPages() {
+    els.pages.innerHTML = "";
+    state.pages.forEach((p, i) => {
+      const b = document.createElement("button");
+      b.className = "page-tab" + (i === state.pageIndex ? " active" : "");
+      b.textContent = `${i + 1}. ${p.title}`;
+      b.onclick = () => {
+        state.pageIndex = i;
+        state.selected = null;
+        state.arrowStart = null;
+        render();
+      };
+      els.pages.appendChild(b);
+    });
+    els.pageTitle.value = page().title;
+    els.description.value = page().description;
+  }
+
+  function renderBoardItems() {
+    const p = page();
+    els.overlay.innerHTML = "";
+    els.arrowLayer.querySelectorAll(".arrow-line, .arrow-start-dot").forEach(n => n.remove());
+
+    for (const h of p.highlights) {
+      const d = document.createElement("div");
+      d.className = "highlight" + (state.selected === h.id ? " selected" : "");
+      d.style.left = h.x * CELL + "px";
+      d.style.top = h.y * CELL + "px";
+      d.style.background = h.color;
+      d.dataset.id = h.id;
+      d.dataset.kind = "highlight";
+      els.overlay.appendChild(d);
+    }
+
+    for (const a of p.arrows) {
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("class", "arrow-line");
+      line.setAttribute("x1", center(a.from.x));
+      line.setAttribute("y1", center(a.from.y));
+      line.setAttribute("x2", center(a.to.x));
+      line.setAttribute("y2", center(a.to.y));
+      line.setAttribute("stroke", "#111827");
+      line.setAttribute("stroke-width", "5");
+      line.setAttribute("stroke-linecap", "round");
+      line.setAttribute("marker-end", "url(#arrowHead)");
+      els.arrowLayer.appendChild(line);
+
+      const hit = document.createElement("div");
+      hit.className = "arrow-hit" + (state.selected === a.id ? " selected" : "");
+      hit.style.left = ((a.from.x + a.to.x + 1) / 2) * CELL + "px";
+      hit.style.top = ((a.from.y + a.to.y + 1) / 2) * CELL + "px";
+      hit.dataset.id = a.id;
+      hit.dataset.kind = "arrow";
+      els.overlay.appendChild(hit);
+    }
+
+    if (state.arrowStart) {
+      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      dot.setAttribute("class", "arrow-start-dot");
+      dot.setAttribute("cx", center(state.arrowStart.x));
+      dot.setAttribute("cy", center(state.arrowStart.y));
+      dot.setAttribute("r", "9");
+      dot.setAttribute("fill", "#111827");
+      els.arrowLayer.appendChild(dot);
+    }
+
+    for (const l of p.labels) {
+      const d = document.createElement("div");
+      d.className = "label" + (state.selected === l.id ? " selected" : "");
+      d.style.left = l.x * CELL + 4 + "px";
+      d.style.top = l.y * CELL + 4 + "px";
+      d.textContent = l.text;
+      d.dataset.id = l.id;
+      d.dataset.kind = "label";
+      els.overlay.appendChild(d);
+    }
+
+    for (const pc of p.pieces) {
+      const b = document.createElement("div");
+      b.className = `piece ${blackPiece(pc.type) ? "black" : "white"}` + (state.selected === pc.id ? " selected" : "");
+      b.style.left = pc.x * CELL + "px";
+      b.style.top = pc.y * CELL + "px";
+      b.textContent = pc.type;
+      b.title = `${pc.type} ${PIECE_NAMES[pc.type] || ""} ${coordText(pc.x, pc.y)}${PIECE_DEFS[pc.type] ? " — " + PIECE_DEFS[pc.type] : ""}`;
+      b.dataset.id = pc.id;
+      b.dataset.kind = "piece";
+      els.overlay.appendChild(b);
+    }
+  }
+
+  function render() {
+    setTransform();
+    renderToolbar();
+    renderPages();
+    renderBoardItems();
+    save();
+  }
+
+  function cellFromEvent(ev) {
+    const rect = els.stage.getBoundingClientRect();
+    const px = (ev.clientX - rect.left - state.pan.x) / state.zoom;
+    const py = (ev.clientY - rect.top - state.pan.y) / state.zoom;
+    return {
+      x: clamp(Math.floor(px / CELL), 0, BOARD - 1),
+      y: clamp(Math.floor(py / CELL), 0, BOARD - 1)
+    };
+  }
+
+  function findById(id) {
+    const p = page();
+    return (
+      p.pieces.find(x => x.id === id) ||
+      p.highlights.find(x => x.id === id) ||
+      p.arrows.find(x => x.id === id) ||
+      p.labels.find(x => x.id === id)
+    );
+  }
+
+  function removeSelected() {
+    const id = state.selected;
+    if (!id) return;
+    const p = page();
+    p.pieces = p.pieces.filter(x => x.id !== id);
+    p.highlights = p.highlights.filter(x => x.id !== id);
+    p.arrows = p.arrows.filter(x => x.id !== id);
+    p.labels = p.labels.filter(x => x.id !== id);
+    state.selected = null;
+    render();
+  }
+
+  function onStageDown(ev) {
+    ev.preventDefault();
+    const target = ev.target.closest("[data-id]");
+    const cell = cellFromEvent(ev);
+
+    if (target) {
+      state.selected = target.dataset.id;
+      const item = findById(state.selected);
+      if (state.tool === "select" && target.dataset.kind === "piece") {
+        pointer.pieceId = state.selected;
+        try { els.stage.setPointerCapture(ev.pointerId); } catch {}
+      }
+      render();
+      return;
+    }
+
+    state.selected = null;
+
+    if (state.tool === "pan") {
+      pointer.pan = {
+        startX: ev.clientX,
+        startY: ev.clientY,
+        x: state.pan.x,
+        y: state.pan.y
+      };
+      try { els.stage.setPointerCapture(ev.pointerId); } catch {}
+      return;
+    }
+
+    if (state.tool === "piece") {
+      page().pieces.push({ id: uid(), type: els.pieceType.value, x: cell.x, y: cell.y });
+      render();
+      return;
+    }
+
+    if (state.tool === "highlight") {
+      const color = els.colorType.value;
+      const existing = page().highlights.find(h => h.x === cell.x && h.y === cell.y && h.color === color);
+      if (existing) page().highlights = page().highlights.filter(h => h.id !== existing.id);
+      else page().highlights.push({ id: uid(), x: cell.x, y: cell.y, color });
+      render();
+      return;
+    }
+
+    if (state.tool === "arrow") {
+      if (!state.arrowStart) state.arrowStart = cell;
+      else {
+        page().arrows.push({ id: uid(), from: state.arrowStart, to: cell });
+        state.arrowStart = null;
+      }
+      render();
+      return;
+    }
+
+    if (state.tool === "label") {
+      page().labels.push({ id: uid(), text: els.labelText.value || "note", x: cell.x, y: cell.y });
+      render();
+      return;
+    }
+
+    render();
+  }
+
+  function onStageMove(ev) {
+    if (pointer.pan) {
+      state.pan.x = pointer.pan.x + ev.clientX - pointer.pan.startX;
+      state.pan.y = pointer.pan.y + ev.clientY - pointer.pan.startY;
+      setTransform();
+      return;
+    }
+    if (pointer.pieceId) {
+      const cell = cellFromEvent(ev);
+      const pc = page().pieces.find(x => x.id === pointer.pieceId);
+      if (pc) {
+        pc.x = cell.x;
+        pc.y = cell.y;
+        renderBoardItems();
+        save();
+      }
+    }
+  }
+
+  function onStageUp() {
+    pointer.pan = null;
+    pointer.pieceId = null;
+    save();
+  }
+
+  function addPage() {
+    state.pages.push(makePage(state.pages.length + 1));
+    state.pageIndex = state.pages.length - 1;
+    state.selected = null;
+    state.arrowStart = null;
+    render();
+  }
+
+  function copyPage() {
+    const cloned = JSON.parse(JSON.stringify(page()));
+    cloned.id = uid();
+    cloned.title = cloned.title + " copy";
+    for (const arrName of ["pieces", "highlights", "arrows", "labels"]) {
+      cloned[arrName] = cloned[arrName].map(x => ({ ...x, id: uid() }));
+    }
+    state.pages.splice(state.pageIndex + 1, 0, cloned);
+    state.pageIndex++;
+    state.selected = null;
+    state.arrowStart = null;
+    render();
+  }
+
+  function deletePage() {
+    if (state.pages.length <= 1) {
+      alert("페이지가 1개뿐이라 삭제할 수 없습니다.");
+      return;
+    }
+    state.pages.splice(state.pageIndex, 1);
+    state.pageIndex = clamp(state.pageIndex, 0, state.pages.length - 1);
+    state.selected = null;
+    state.arrowStart = null;
+    render();
+  }
+
+  function exportJson() {
+    const data = {
+      app: "Infinite Chess Mate Notebook",
+      version: 1,
+      savedAt: new Date().toISOString(),
+      pages: state.pages
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "infinite-chess-mate-notebook.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importJsonFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data.pages)) throw new Error("pages 배열이 없습니다.");
+        state.pages = data.pages;
+        state.pageIndex = 0;
+        state.selected = null;
+        state.arrowStart = null;
+        render();
+      } catch (e) {
+        alert("JSON을 불러올 수 없습니다: " + e.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  document.querySelectorAll("[data-tool]").forEach(b => {
+    b.addEventListener("click", () => {
+      state.tool = b.dataset.tool;
+      state.arrowStart = null;
+      render();
+    });
+  });
+
+  els.pieceType.addEventListener("change", renderToolbar);
+
+  document.getElementById("zoomIn").onclick = () => {
+    state.zoom = clamp(state.zoom * 1.2, 0.18, 3);
+    render();
+  };
+  document.getElementById("zoomOut").onclick = () => {
+    state.zoom = clamp(state.zoom / 1.2, 0.18, 3);
+    render();
+  };
+  document.getElementById("deleteItem").onclick = removeSelected;
+  document.getElementById("newPage").onclick = addPage;
+  document.getElementById("copyPage").onclick = copyPage;
+  document.getElementById("deletePage").onclick = deletePage;
+  document.getElementById("exportJson").onclick = exportJson;
+  document.getElementById("importJson").onclick = () => els.fileInput.click();
+
+  els.fileInput.addEventListener("change", () => {
+    const file = els.fileInput.files && els.fileInput.files[0];
+    if (file) importJsonFile(file);
+    els.fileInput.value = "";
+  });
+
+  els.pageTitle.addEventListener("input", () => {
+    page().title = els.pageTitle.value;
+    renderPages();
+    save();
+  });
+  els.description.addEventListener("input", () => {
+    page().description = els.description.value;
+    save();
+  });
+
+  els.stage.addEventListener("pointerdown", onStageDown);
+  els.stage.addEventListener("pointermove", onStageMove);
+  els.stage.addEventListener("pointerup", onStageUp);
+  els.stage.addEventListener("pointercancel", onStageUp);
+
+  // Two-finger pinch zoom
+  const touches = new Map();
+  let pinch = null;
+  els.stage.addEventListener("pointerdown", ev => {
+    if (ev.pointerType === "touch") touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (touches.size === 2) {
+      const pts = [...touches.values()];
+      const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+      pinch = { dist: Math.hypot(dx, dy), zoom: state.zoom };
+    }
+  }, { passive: false });
+  els.stage.addEventListener("pointermove", ev => {
+    if (ev.pointerType === "touch" && touches.has(ev.pointerId)) {
+      touches.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinch && touches.size === 2) {
+        const pts = [...touches.values()];
+        const dx = pts[0].x - pts[1].x, dy = pts[0].y - pts[1].y;
+        const dist = Math.hypot(dx, dy);
+        state.zoom = clamp(pinch.zoom * dist / pinch.dist, 0.18, 3);
+        setTransform();
+      }
+    }
+  }, { passive: false });
+  els.stage.addEventListener("pointerup", ev => { touches.delete(ev.pointerId); pinch = null; }, { passive: false });
+  els.stage.addEventListener("pointercancel", ev => { touches.delete(ev.pointerId); pinch = null; }, { passive: false });
+
+  window.addEventListener("keydown", ev => {
+    if (ev.key === "Delete" || ev.key === "Backspace") {
+      const tag = document.activeElement.tagName;
+      if (tag !== "TEXTAREA" && tag !== "INPUT") removeSelected();
+    }
+    if (ev.key === "Escape") {
+      state.arrowStart = null;
+      state.selected = null;
+      render();
+    }
+  });
+
+  renderGridOnce();
+  render();
+})();
+</script>
+</body>
+</html>
