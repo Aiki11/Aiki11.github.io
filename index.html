@@ -223,6 +223,31 @@
       }
       textarea { height: 100%; max-height: none; }
     }
+
+    /* =========================================================
+       TEMP: Board-only view
+       ---------------------------------------------------------
+       The original toolbar, bottom panel, status badge, pieces,
+       arrows, highlights, and labels are preserved in the HTML/JS
+       above, but hidden from the screen for now.
+       Remove or comment out this block to restore the full UI.
+       ========================================================= */
+    .toolbar,
+    .bottom,
+    .status,
+    #overlay,
+    #arrowLayer {
+      display: none !important;
+    }
+    .app {
+      grid-template-rows: 1fr !important;
+      gap: 0 !important;
+      padding: 0 !important;
+    }
+    .stage {
+      border-radius: 0 !important;
+      border: 0 !important;
+    }
   </style>
 </head>
 <body>
