@@ -1,409 +1,482 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <title>Infinite Chess Mate Notebook</title>
-  <style>
-    :root {
-      --app-bg: #ede9df;
-      --panel-bg: #f8f6f0;
-      --board-light: #f0d9b5;
-      --board-dark: #b58863;
-      --board-line: rgba(31, 41, 55, 0.18);
-      --major-line: rgba(17, 24, 39, 0.36);
-      --ink: #1f2937;
-      --muted: #6b7280;
-      --line: rgba(31,41,55,.16);
-      --cell-size: 40px;
-      --board-size: calc(100 * var(--cell-size));
-      --palette-gap: 8px;
-    }
-
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body {
-      width: 100%; height: 100%; margin: 0; overflow: hidden;
-      overscroll-behavior: none; background: var(--app-bg); color: var(--ink);
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    button, textarea { font: inherit; }
-    .app {
-      width: 100%; height: 100%;
-      display: grid; grid-template-rows: auto 1fr;
-      gap: 10px; padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
-    }
-
-    .board-shell {
-      position: relative; width: min(100vw - 16px, 72vh); max-width: 720px;
-      aspect-ratio: 1 / 1; margin: 0 auto;
-      border-radius: 14px; overflow: hidden; background: #111827;
-      box-shadow: 0 6px 24px rgba(0,0,0,.18);
-      touch-action: none;
-    }
-    .board-viewport { position: absolute; inset: 0; overflow: hidden; touch-action: none; background: #222; }
-    .board-layer {
-      position: absolute; left: 0; top: 0; width: var(--board-size); height: var(--board-size);
-      transform-origin: 0 0; will-change: transform;
-      background-color: var(--board-light);
-      background-image:
-        linear-gradient(45deg, var(--board-dark) 25%, transparent 25%),
-        linear-gradient(-45deg, var(--board-dark) 25%, transparent 25%),
-        linear-gradient(45deg, transparent 75%, var(--board-dark) 75%),
-        linear-gradient(-45deg, transparent 75%, var(--board-dark) 75%),
-        linear-gradient(to right, var(--board-line) 1px, transparent 1px),
-        linear-gradient(to bottom, var(--board-line) 1px, transparent 1px),
-        linear-gradient(to right, transparent calc(10 * var(--cell-size) - 2px), var(--major-line) calc(10 * var(--cell-size) - 2px), var(--major-line) calc(10 * var(--cell-size)), transparent calc(10 * var(--cell-size))),
-        linear-gradient(to bottom, transparent calc(10 * var(--cell-size) - 2px), var(--major-line) calc(10 * var(--cell-size) - 2px), var(--major-line) calc(10 * var(--cell-size)), transparent calc(10 * var(--cell-size)));
-      background-size:
-        calc(2 * var(--cell-size)) calc(2 * var(--cell-size)),
-        calc(2 * var(--cell-size)) calc(2 * var(--cell-size)),
-        calc(2 * var(--cell-size)) calc(2 * var(--cell-size)),
-        calc(2 * var(--cell-size)) calc(2 * var(--cell-size)),
-        var(--cell-size) var(--cell-size),
-        var(--cell-size) var(--cell-size),
-        calc(10 * var(--cell-size)) calc(10 * var(--cell-size)),
-        calc(10 * var(--cell-size)) calc(10 * var(--cell-size));
-      background-position:
-        0 0, 0 var(--cell-size), var(--cell-size) calc(-1 * var(--cell-size)), calc(-1 * var(--cell-size)) 0,
-        0 0, 0 0, 0 0, 0 0;
-    }
-
-    .mode-toggle {
-      position: absolute; top: 10px; right: 10px; z-index: 5;
-      width: 44px; height: 44px; border-radius: 12px; border: 1px solid rgba(0,0,0,.18);
-      background: rgba(255,255,255,.88); display: grid; place-items: center;
-      box-shadow: 0 3px 12px rgba(0,0,0,.22); backdrop-filter: blur(8px);
-    }
-    .mode-toggle svg { width: 25px; height: 25px; }
-    .mode-toggle .stroke { fill: none; stroke: #111827; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
-
-    .bottom-panel {
-      min-height: 0; border: 1px solid var(--line); border-radius: 18px;
-      box-shadow: 0 4px 18px rgba(0,0,0,.08);
-      padding: 10px; background: var(--panel-bg);
-      overflow: hidden;
-    }
-    .piece-palette {
-      display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(3, minmax(58px, 1fr));
-      gap: var(--palette-gap); width: 100%; height: 100%;
-    }
-    .palette-cell {
-      position: relative; min-height: 58px; border: 1px solid var(--line); border-radius: 14px;
-      background: rgba(255,255,255,.82); display: grid; place-items: center;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.5); padding: 3px;
-    }
-    .palette-cell img {
-      width: min(50px, 82%); height: min(50px, 82%); object-fit: contain; display: block;
-      user-select: none; pointer-events: none;
-    }
-    .palette-code {
-      position: absolute; right: 5px; bottom: 3px; font-size: 10px; font-weight: 800;
-      color: rgba(31,41,55,.54); line-height: 1;
-    }
-    .color-toggle { font-weight: 900; }
-    .color-toggle.white-side { background: #fff; color: #111827; }
-    .color-toggle.black-side { background: #111827; color: #fff; border-color: #111827; }
-    .toggle-mark { display: grid; place-items: center; gap: 3px; font-size: 10px; }
-    .toggle-mark .disc { width: 26px; height: 26px; border-radius: 999px; border: 2px solid currentColor; background: currentColor; box-shadow: inset 0 0 0 6px rgba(255,255,255,.38); }
-
-    .description-wrap { display: none; height: 100%; }
-    .description-wrap textarea {
-      width: 100%; height: 100%; min-height: 160px; resize: none;
-      border: 1px solid var(--line); border-radius: 16px; padding: 12px;
-      background: rgba(255,255,255,.9); outline: none;
-    }
-    .highlight-mode .piece-palette { display: none; }
-    .highlight-mode .description-wrap { display: block; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>오목 노트</title>
+<style>
+:root{
+  --bg:#e6eae5; --panel:#f7f8f5; --ink:#1c2420; --muted:#5f6b65; --rule:#c9d0ca;
+  --btn:#ffffff; --btn-ink:#1c2420; --primary:#1f5f57; --primary-ink:#ffffff;
+  --danger:#a8322a; --board:#d8aa63; --board-edge:#b98a45; --grid:#4b3a1f;
+  --link:#11756d; --forbid:#c0392b; --last:#d6452f;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#141917; --panel:#1d2421; --ink:#e3e8e4; --muted:#93a19a; --rule:#33403a;
+    --btn:#26302c; --btn-ink:#e3e8e4; --primary:#2f8a7f; --primary-ink:#ffffff;
+    --danger:#d1574d; --board:#c99a55; --board-edge:#a47838; --grid:#3d2f18;
+    --link:#0d6b63; --forbid:#b3261e; --last:#e0442b;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+  font-size:16px; line-height:1.5;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  -webkit-tap-highlight-color:transparent;
+}
+body.locked{overflow:hidden}
+.wrap{max-width:540px;margin:0 auto;padding:12px 12px 32px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}
+h1{font-size:1.25rem;margin:0;font-weight:700;letter-spacing:-0.01em}
+.path{font-size:.85rem;color:var(--muted);overflow-x:auto;white-space:nowrap;margin-bottom:4px}
+.pos{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8rem;color:var(--muted);
+  overflow-x:auto;white-space:nowrap;padding-bottom:2px;margin-bottom:8px}
+.board-box{background:var(--board);border:2px solid var(--board-edge);border-radius:6px;padding:0;touch-action:manipulation}
+svg.board{display:block;width:100%;height:auto;user-select:none;-webkit-user-select:none}
+.row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.row .grow{flex:1}
+button{
+  font:inherit;font-size:.95rem;min-height:44px;padding:0 14px;border-radius:8px;
+  border:1px solid var(--rule);background:var(--btn);color:var(--btn-ink);cursor:pointer;
+  touch-action:manipulation;
+}
+button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--primary);color:var(--primary-ink);border-color:var(--primary)}
+button.danger{color:var(--danger)}
+button:focus-visible,textarea:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+.step{min-width:76px;text-align:center;font-variant-numeric:tabular-nums;color:var(--muted);font-size:.9rem}
+.hint{font-size:.85rem;color:var(--muted);margin-top:8px;min-height:1.3em}
+label.memo-label{display:block;font-size:.9rem;font-weight:600;margin:14px 0 4px}
+textarea{
+  width:100%;min-height:150px;resize:vertical;font:inherit;font-size:16px;line-height:1.55;
+  padding:10px 12px;border-radius:8px;border:1px solid var(--rule);background:var(--panel);color:var(--ink);
+}
+.files{border-top:1px solid var(--rule);margin-top:18px;padding-top:6px}
+#overlay{position:fixed;inset:0;background:var(--bg);overflow-y:auto;display:none;z-index:10;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+#overlay.open{display:block}
+.sub{font-size:.85rem;color:var(--muted)}
+</style>
 </head>
 <body>
-  <main class="app edit-mode" id="app">
-    <section class="board-shell">
-      <div class="board-viewport" id="boardViewport">
-        <div class="board-layer" id="boardLayer"></div>
-      </div>
-      <button class="mode-toggle" id="modeToggle" type="button" aria-label="mode toggle"></button>
-    </section>
 
-    <section class="bottom-panel">
-      <div class="piece-palette" id="piecePalette"></div>
-      <div class="description-wrap">
-        <textarea placeholder="체크메이트 패턴, 강제 수순, 기물 역할 등을 적어두세요."></textarea>
-      </div>
-    </section>
-  </main>
+<div class="wrap" id="main">
+  <header>
+    <h1>오목 노트</h1>
+    <span class="sub" id="dirtyMark"></span>
+  </header>
+  <div class="path" id="pathText"></div>
+  <div class="pos" id="posText"></div>
 
-  <script>
-    const BOARD_SIZE = 100;
-    const CELL_SIZE = 40;
-    const INITIAL_VISIBLE_CELLS = 10;
+  <div class="board-box"><svg class="board" id="mainBoard"></svg></div>
 
-    const app = document.getElementById('app');
-    const boardViewport = document.getElementById('boardViewport');
-    const boardLayer = document.getElementById('boardLayer');
-    const modeToggle = document.getElementById('modeToggle');
-    const piecePalette = document.getElementById('piecePalette');
+  <div class="row">
+    <button id="btnPrev" aria-label="이전 수">◀ 이전</button>
+    <div class="step" id="stepText"></div>
+    <button id="btnNext" aria-label="다음 수">다음 ▶</button>
+  </div>
+  <div class="hint" id="mainHint"></div>
 
-    let mode = 'edit';
-    let pieceColor = 'white';
-    let transform = { x: 0, y: 0, scale: 1 };
-    let activeGesture = null;
-    let ignoreUntilNoTouches = false;
+  <div class="row">
+    <button id="btnParent" class="grow">부모 노드로</button>
+    <button id="btnDelete" class="danger">노드 삭제</button>
+  </div>
 
-    const COMMONS = 'https://commons.wikimedia.org/wiki/Special:Redirect/file/';
-    const commonsFile = (name) => COMMONS + encodeURIComponent(name);
+  <label class="memo-label" for="mainMemo">메모</label>
+  <textarea id="mainMemo" placeholder="이 국면에 대한 메모"></textarea>
 
-    const PIECES = ['K', 'Q', 'R', 'B', 'N', 'P', 'C', 'A', 'Am', 'G', 'H', 'Ct', 'NR', 'Hu'];
+  <div class="row files">
+    <button id="btnSave" class="grow">JSON 저장</button>
+    <button id="btnLoad" class="grow">JSON 불러오기</button>
+    <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  </div>
+</div>
 
-    // Wikimedia Commons SVG 직접 참조.
-    // 나중에 로컬 파일로 바꾸려면 값만 './pieces/white_K.svg' 같은 경로로 바꾸면 된다.
-    const PIECE_SOURCES = {
-      white: {
-        K: commonsFile('Chess klt45.svg'),
-        Q: commonsFile('Chess qlt45.svg'),
-        R: commonsFile('Chess rlt45.svg'),
-        B: commonsFile('Chess blt45.svg'),
-        N: commonsFile('Chess nlt45.svg'),
-        P: commonsFile('Chess plt45.svg'),
-        C: commonsFile('Chess clt45.svg'),
-        A: commonsFile('Chess alt45.svg'),
-        Am: commonsFile('Chess Alt45.svg'),
-        G: commonsFile('Chess Mlt45.svg'),
-        Ct: commonsFile('White Centaur Xogos da Meiga chess icons family.svg'),
-        // 요청 반영: Nightrider는 Unicorn 계열 이미지 사용
-        NR: commonsFile('Chess Ult45.svg')
-      },
-      black: {
-        K: commonsFile('Chess kdt45.svg'),
-        Q: commonsFile('Chess qdt45.svg'),
-        R: commonsFile('Chess rdt45.svg'),
-        B: commonsFile('Chess bdt45.svg'),
-        N: commonsFile('Chess ndt45.svg'),
-        P: commonsFile('Chess pdt45.svg'),
-        C: commonsFile('Chess cdt45.svg'),
-        A: commonsFile('Chess adt45.svg'),
-        Am: commonsFile('Chess Adt45.svg'),
-        G: commonsFile('Chess Mdt45.svg'),
-        Ct: commonsFile('Black Centaur Xogos da Meiga chess icons family.svg'),
-        NR: commonsFile('Chess Udt45.svg')
-      }
-    };
+<div id="overlay" role="dialog" aria-modal="true" aria-labelledby="editTitle">
+  <div class="wrap">
+    <header>
+      <h1 id="editTitle">새 분기</h1>
+      <span class="sub" id="editCount"></span>
+    </header>
+    <div class="pos" id="editPos"></div>
+    <div class="board-box"><svg class="board" id="editBoard"></svg></div>
+    <div class="row">
+      <button id="btnUndo">수 무르기</button>
+      <div class="grow"></div>
+    </div>
+    <div class="hint">빈 칸을 눌러 이어서 둘 수 있습니다.</div>
+    <label class="memo-label" for="editMemo">메모</label>
+    <textarea id="editMemo" placeholder="새 국면에 대한 메모"></textarea>
+    <div class="row">
+      <button id="btnEditClose" class="grow">저장하지 않고 닫기</button>
+      <button id="btnEditSave" class="primary grow">저장</button>
+    </div>
+  </div>
+</div>
 
-    function customPieceSvg(code, color) {
-      const white = color === 'white';
-      const fill = white ? '#f8f8f2' : '#1f2430';
-      const detail = white ? '#d8d3c4' : '#4a5361';
-      const eye = white ? '#111111' : '#ffffff';
-      const stroke = '#111111';
-      let body = '';
+<script>
+/* ===================== 좌표·인코딩 ===================== */
+const N = 15;
+const HEX = "0123456789ABCDEF";
+const VALID = "123456789ABCDEF";
+const enc = (x, y) => HEX[x] + HEX[y];
+function parsePos(s){
+  const m = [];
+  for (let i = 0; i < s.length; i += 2) m.push([HEX.indexOf(s[i]), HEX.indexOf(s[i+1])]);
+  return m;
+}
+function buildBoard(moves, n){
+  const b = new Int8Array(256);          // 0 빈칸, 1 흑, 2 백
+  for (let i = 0; i < n; i++){ const [x,y] = moves[i]; b[x*16+y] = (i % 2 === 0) ? 1 : 2; }
+  return b;
+}
+function at(b, x, y){ return (x < 1 || x > N || y < 1 || y > N) ? 3 : b[x*16+y]; }
 
-      if (code === 'H') {
-        // 받침대 없는 임시 Hawk 더미
-        body = `
-          <path d="M24 72 C28 54 35 36 49 25 C61 16 75 19 82 30 C76 28 66 28 58 34 C66 36 75 42 75 51 C75 60 66 65 56 66 C48 67 39 69 24 72 Z" fill="${fill}" stroke="${stroke}" stroke-width="4" stroke-linejoin="round"/>
-          <path d="M72 39 C80 39 86 43 86 49 C82 47 77 47 72 49" fill="none" stroke="${stroke}" stroke-width="4" stroke-linecap="round"/>
-          <circle cx="64" cy="42" r="2.4" fill="${eye}"/>
-          <path d="M35 65 C43 55 52 49 64 45" stroke="${detail}" stroke-width="3" opacity=".8" stroke-linecap="round"/>`;
-      } else if (code === 'Hu') {
-        // 받침대 없는 임시 Huygen 더미
-        body = `
-          <path d="M30 28 H70 Q74 32 74 38 V76 H26 V38 Q26 32 30 28 Z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
-          <path d="M38 18 H62 V31 H38 Z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
-          <circle cx="50" cy="42" r="3" fill="${detail}"/>
-          <circle cx="50" cy="54" r="3" fill="${detail}"/>
-          <circle cx="50" cy="68" r="3" fill="${detail}"/>`;
-      } else {
-        // 외부 SVG 실패 시 보여줄 받침대 없는 더미
-        body = `
-          <circle cx="50" cy="34" r="15" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
-          <path d="M32 77 C34 56 40 48 50 48 C60 48 66 56 68 77 Z" fill="${fill}" stroke="${stroke}" stroke-width="4"/>
-          <text x="50" y="67" text-anchor="middle" font-size="20" font-family="system-ui, sans-serif" font-weight="800" fill="${eye}">${code}</text>`;
-      }
+/* ===================== 흑 금수 판정 (렌주) ===================== */
+const DIRS = [[1,0],[0,1],[1,1],[1,-1]];
 
-      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${body}</svg>`)}`;
+// (x,y)를 지나는 연속된 흑돌의 범위 [lo, hi] (오프셋)
+function blackRun(b, x, y, dx, dy){
+  let lo = 0, hi = 0;
+  while (at(b, x+(hi+1)*dx, y+(hi+1)*dy) === 1) hi++;
+  while (at(b, x+(lo-1)*dx, y+(lo-1)*dy) === 1) lo--;
+  return [lo, hi];
+}
+
+// p가 놓인 상태에서, 방향 d로 p가 만든 4의 개수 (같은 줄의 두 4도 각각 셈, 열린 4는 1)
+function countFours(b, x, y, dx, dy){
+  const ks = [];
+  for (let k = -4; k <= 4; k++){
+    if (!k) continue;
+    const qx = x+k*dx, qy = y+k*dy;
+    if (at(b, qx, qy) !== 0) continue;
+    b[qx*16+qy] = 1;
+    const [lo, hi] = blackRun(b, qx, qy, dx, dy);
+    b[qx*16+qy] = 0;
+    if (hi - lo + 1 === 5 && lo <= -k && -k <= hi) ks.push(k);
+  }
+  if (ks.length === 2 && Math.abs(ks[0] - ks[1]) === 5){
+    const a = Math.min(ks[0], ks[1]);
+    let solid = true;
+    for (let t = a+1; t < a+5; t++) if (at(b, x+t*dx, y+t*dy) !== 1) solid = false;
+    if (solid) return 1;
+  }
+  return Math.min(ks.length, 2);
+}
+
+// p가 놓인 상태에서, 방향 d로 p를 포함하는 '진짜 3'이 있는지
+function hasThree(b, x, y, dx, dy, depth){
+  for (let k = -4; k <= 4; k++){
+    if (!k) continue;
+    const qx = x+k*dx, qy = y+k*dy;
+    if (at(b, qx, qy) !== 0) continue;
+    b[qx*16+qy] = 1;
+    const [lo, hi] = blackRun(b, qx, qy, dx, dy);
+    let straight = false;
+    if (hi - lo + 1 === 4 && lo <= -k && -k <= hi){
+      straight =
+        at(b, qx+(lo-1)*dx, qy+(lo-1)*dy) === 0 &&
+        at(b, qx+(hi+1)*dx, qy+(hi+1)*dy) === 0 &&
+        at(b, qx+(lo-2)*dx, qy+(lo-2)*dy) !== 1 &&
+        at(b, qx+(hi+2)*dx, qy+(hi+2)*dy) !== 1;
     }
+    b[qx*16+qy] = 0;
+    if (straight && !isForbidden(b, qx, qy, depth+1)) return true;
+  }
+  return false;
+}
 
-    function iconSvg(name) {
-      if (name === 'edit') {
-        return '<svg viewBox="0 0 24 24"><path class="stroke" d="M4 20h4l11-11a2.5 2.5 0 0 0-4-4L4 16v4Z"/><path class="stroke" d="M13 6l5 5"/></svg>';
-      }
-      return '<svg viewBox="0 0 24 24"><path class="stroke" d="M5 19h14"/><path class="stroke" d="M8 16l8-8a2.4 2.4 0 0 1 3.4 3.4l-8 8"/><path class="stroke" d="M14 6l4 4"/><path class="stroke" d="M6 21l3-3"/></svg>';
+// 빈 칸 (x,y)가 흑에게 금수인지
+function isForbidden(b, x, y, depth = 0){
+  if (at(b, x, y) !== 0) return false;
+  b[x*16+y] = 1;
+  try {
+    let five = false, over = false;
+    for (const [dx,dy] of DIRS){
+      const [lo, hi] = blackRun(b, x, y, dx, dy);
+      const len = hi - lo + 1;
+      if (len === 5) five = true; else if (len > 5) over = true;
     }
-
-    function updateModeUi() {
-      app.classList.toggle('highlight-mode', mode === 'highlight');
-      app.classList.toggle('edit-mode', mode === 'edit');
-      modeToggle.innerHTML = iconSvg(mode === 'edit' ? 'edit' : 'highlight');
-      modeToggle.title = mode === 'edit' ? '보드 편집 모드' : '보드 하이라이트 모드';
+    if (five) return false;            // 정확한 5는 금수보다 우선
+    if (over) return true;             // 장목
+    let fours = 0;
+    for (const [dx,dy] of DIRS) fours += countFours(b, x, y, dx, dy);
+    if (fours >= 2) return true;       // 44
+    if (depth < 12){
+      let threes = 0;
+      for (const [dx,dy] of DIRS) if (hasThree(b, x, y, dx, dy, depth)) threes++;
+      if (threes >= 2) return true;    // 33
     }
+    return false;
+  } finally {
+    b[x*16+y] = 0;
+  }
+}
+function forbiddenSet(b){
+  const s = new Set();
+  for (let x = 1; x <= N; x++) for (let y = 1; y <= N; y++)
+    if (b[x*16+y] === 0 && isForbidden(b, x, y)) s.add(enc(x,y));
+  return s;
+}
 
-    function renderPalette() {
-      piecePalette.innerHTML = '';
-      for (const code of PIECES) {
-        const btn = document.createElement('button');
-        btn.className = 'palette-cell piece-button';
-        btn.type = 'button';
-        btn.dataset.piece = code;
-        btn.title = `${pieceColor === 'white' ? 'White' : 'Black'} ${code}`;
+/* ===================== 판 그리기 ===================== */
+const C = 40, M = 34, VB = M*2 + C*(N-1);
+const px = x => M + (x-1)*C;
+const py = y => M + (N-y)*C;
 
-        const img = document.createElement('img');
-        img.alt = code;
-        img.src = PIECE_SOURCES[pieceColor]?.[code] || customPieceSvg(code, pieceColor);
-        img.onerror = () => {
-          img.onerror = null;
-          img.src = customPieceSvg(code, pieceColor);
-        };
+function drawBoard(svg, opt){
+  // opt: { moves, shown, links:Set, forbid:Set }
+  const o = [];
+  o.push(`<rect x="0" y="0" width="${VB}" height="${VB}" fill="var(--board)"/>`);
+  for (let i = 1; i <= N; i++){
+    o.push(`<line x1="${px(1)}" y1="${py(i)}" x2="${px(N)}" y2="${py(i)}" stroke="var(--grid)" stroke-width="${i===1||i===N?1.6:1}"/>`);
+    o.push(`<line x1="${px(i)}" y1="${py(1)}" x2="${px(i)}" y2="${py(N)}" stroke="var(--grid)" stroke-width="${i===1||i===N?1.6:1}"/>`);
+    o.push(`<text x="${px(i)}" y="${VB-9}" font-size="13" text-anchor="middle" fill="var(--grid)">${HEX[i]}</text>`);
+    o.push(`<text x="12" y="${py(i)+4.5}" font-size="13" text-anchor="middle" fill="var(--grid)">${HEX[i]}</text>`);
+  }
+  for (const [sx,sy] of [[4,4],[12,4],[4,12],[12,12],[8,8]])
+    o.push(`<circle cx="${px(sx)}" cy="${py(sy)}" r="3.6" fill="var(--grid)"/>`);
 
-        const label = document.createElement('span');
-        label.className = 'palette-code';
-        label.textContent = code;
-        btn.append(img, label);
-        piecePalette.append(btn);
-      }
+  if (opt.forbid) for (const k of opt.forbid){
+    const [x,y] = parsePos(k)[0], cx = px(x), cy = py(y), r = 8;
+    o.push(`<path d="M${cx-r} ${cy-r}L${cx+r} ${cy+r}M${cx+r} ${cy-r}L${cx-r} ${cy+r}" stroke="var(--forbid)" stroke-width="3" stroke-linecap="round"/>`);
+  }
+  if (opt.links) for (const k of opt.links){
+    const [x,y] = parsePos(k)[0];
+    o.push(`<circle cx="${px(x)}" cy="${py(y)}" r="14" fill="var(--link)" fill-opacity=".28" stroke="var(--link)" stroke-width="3"/>`);
+  }
+  const { moves, shown } = opt;
+  for (let i = 0; i < shown; i++){
+    const [x,y] = moves[i], black = i % 2 === 0, last = i === shown - 1;
+    o.push(`<circle cx="${px(x)}" cy="${py(y)}" r="18.2" fill="${black?'#151515':'#f6f6f2'}" stroke="${black?'#000':'#6d6d66'}" stroke-width="1.2"/>`);
+    const n = i + 1, fs = n >= 100 ? 12.5 : 15.5;
+    const col = last ? 'var(--last)' : (black ? '#f6f6f2' : '#151515');
+    o.push(`<text x="${px(x)}" y="${py(y)+fs*0.36}" font-size="${fs}" font-weight="${last?700:500}" text-anchor="middle" fill="${col}" style="font-variant-numeric:tabular-nums">${n}</text>`);
+  }
+  svg.setAttribute("viewBox", `0 0 ${VB} ${VB}`);
+  svg.innerHTML = o.join("");
+}
 
-      const toggle = document.createElement('button');
-      toggle.className = `palette-cell color-toggle ${pieceColor === 'white' ? 'white-side' : 'black-side'}`;
-      toggle.type = 'button';
-      toggle.title = '흑백 변경';
-      toggle.innerHTML = `<span class="toggle-mark"><span class="disc"></span><span>${pieceColor === 'white' ? 'WHITE' : 'BLACK'}</span></span>`;
-      toggle.addEventListener('click', () => {
-        pieceColor = pieceColor === 'white' ? 'black' : 'white';
-        renderPalette();
-      });
-      piecePalette.append(toggle);
-    }
+function cellFromEvent(svg, e){
+  const r = svg.getBoundingClientRect();
+  const vx = (e.clientX - r.left) / r.width * VB;
+  const vy = (e.clientY - r.top) / r.height * VB;
+  const x = Math.round((vx - M) / C) + 1;
+  const y = N - Math.round((vy - M) / C);
+  if (x < 1 || x > N || y < 1 || y > N) return null;
+  if (Math.hypot(vx - px(x), vy - py(y)) > C * 0.55) return null;
+  return [x, y];
+}
 
-    function applyTransform() {
-      boardLayer.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`;
-    }
+/* ===================== 상태 ===================== */
+const newNode = (position) => ({ position, note: "", children: [] });
+let root = newNode("");
+let path = [root];       // 루트부터 현재 노드까지
+let step = 0;            // 다시보기에서 보여 주는 수의 개수
+let dirty = false;
+let edit = null;         // { parent, base, moves }
 
-    function clampTransform() {
-      const rect = boardViewport.getBoundingClientRect();
-      const scaled = BOARD_SIZE * CELL_SIZE * transform.scale;
-      if (scaled <= rect.width) transform.x = (rect.width - scaled) / 2;
-      else transform.x = Math.min(0, Math.max(rect.width - scaled, transform.x));
-      if (scaled <= rect.height) transform.y = (rect.height - scaled) / 2;
-      else transform.y = Math.min(0, Math.max(rect.height - scaled, transform.y));
-    }
+const $ = id => document.getElementById(id);
+const cur = () => path[path.length - 1];
+const firstMove = (child, parent) => child.position.substr(parent.position.length, 2);
 
-    function resetInitialBoardView() {
-      const rect = boardViewport.getBoundingClientRect();
-      transform.scale = (rect.width / INITIAL_VISIBLE_CELLS) / CELL_SIZE;
-      const boardCenter = (BOARD_SIZE * CELL_SIZE / 2) * transform.scale;
-      transform.x = rect.width / 2 - boardCenter;
-      transform.y = rect.height / 2 - boardCenter;
-      clampTransform();
-      applyTransform();
-    }
+function setDirty(v){ dirty = v; $("dirtyMark").textContent = v ? "저장되지 않은 변경 있음" : ""; }
 
-    function viewportPoint(touch) {
-      const rect = boardViewport.getBoundingClientRect();
-      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
-    }
-    function boardCoordFromViewport(point, tf = transform) {
-      return { x: (point.x - tf.x) / tf.scale, y: (point.y - tf.y) / tf.scale };
-    }
-    function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-    function mid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+/* ===================== 일반 화면 ===================== */
+function renderMain(){
+  const node = cur();
+  const moves = parsePos(node.position);
+  const total = moves.length;
+  if (step > total) step = total;
+  const b = buildBoard(moves, step);
+  const atEnd = step === total;
+  const links = new Set();
+  if (atEnd) for (const ch of node.children) links.add(firstMove(ch, node));
 
-    boardViewport.addEventListener('touchstart', (event) => {
-      if (mode !== 'edit') return;
-      event.preventDefault();
-      const touches = [...event.touches];
-      if (touches.length >= 3) {
-        activeGesture = null;
-        ignoreUntilNoTouches = true;
-        return;
-      }
-      if (ignoreUntilNoTouches) return;
-      if (touches.length === 1) {
-        const p = viewportPoint(touches[0]);
-        activeGesture = { type: 'pan', anchorBoard: boardCoordFromViewport(p) };
-      } else if (touches.length === 2) {
-        const p1 = viewportPoint(touches[0]);
-        const p2 = viewportPoint(touches[1]);
-        activeGesture = {
-          type: 'pinch',
-          startScale: transform.scale,
-          startDistance: dist(p1, p2),
-          anchor1: boardCoordFromViewport(p1),
-          anchor2: boardCoordFromViewport(p2)
-        };
-      }
-    }, { passive: false });
+  drawBoard($("mainBoard"), { moves, shown: step, links, forbid: forbiddenSet(b) });
 
-    boardViewport.addEventListener('touchmove', (event) => {
-      if (mode !== 'edit') return;
-      event.preventDefault();
-      const touches = [...event.touches];
-      if (touches.length >= 3) {
-        activeGesture = null;
-        ignoreUntilNoTouches = true;
-        return;
-      }
-      if (ignoreUntilNoTouches || !activeGesture) return;
+  $("pathText").textContent = path.map((n, i) => i === 0 ? "루트" : `${n.position.length/2}수`).join(" › ");
+  $("posText").textContent = node.position || "(빈 판)";
+  $("stepText").textContent = `${step} / ${total}`;
+  $("btnPrev").disabled = step === 0;
+  $("btnNext").disabled = atEnd;
+  $("btnParent").disabled = path.length === 1;
+  $("btnDelete").disabled = path.length === 1;
+  $("mainHint").textContent = atEnd
+    ? (node.children.length ? `분기 ${node.children.length}개` : "빈 칸을 눌러 새 분기를 만들 수 있습니다.")
+    : "다시보기 중입니다. 마지막 수에서 분기를 사용할 수 있습니다.";
+}
 
-      if (activeGesture.type === 'pan' && touches.length === 1) {
-        const p = viewportPoint(touches[0]);
-        transform.x = p.x - activeGesture.anchorBoard.x * transform.scale;
-        transform.y = p.y - activeGesture.anchorBoard.y * transform.scale;
-      } else if (activeGesture.type === 'pinch' && touches.length === 2) {
-        const p1 = viewportPoint(touches[0]);
-        const p2 = viewportPoint(touches[1]);
-        const nowDistance = Math.max(1, dist(p1, p2));
-        const scaleFactor = nowDistance / Math.max(1, activeGesture.startDistance);
-        transform.scale = Math.min(12, Math.max(0.08, activeGesture.startScale * scaleFactor));
+function goTo(node){
+  path.push(node);
+  step = parsePos(node.position).length;
+  $("mainMemo").value = node.note;
+  renderMain();
+  window.scrollTo(0, 0);
+}
+function goParent(){
+  if (path.length === 1) return;
+  path.pop();
+  step = cur().position.length / 2;
+  $("mainMemo").value = cur().note;
+  renderMain();
+}
+function countNodes(n){ return 1 + n.children.reduce((s, c) => s + countNodes(c), 0); }
 
-        const nowMid = mid(p1, p2);
-        const anchorMid = mid(activeGesture.anchor1, activeGesture.anchor2);
-        transform.x = nowMid.x - anchorMid.x * transform.scale;
-        transform.y = nowMid.y - anchorMid.y * transform.scale;
-      }
-      clampTransform();
-      applyTransform();
-    }, { passive: false });
+$("mainBoard").addEventListener("click", e => {
+  const node = cur();
+  const total = node.position.length / 2;
+  if (step !== total) return;
+  const c = cellFromEvent($("mainBoard"), e);
+  if (!c) return;
+  const key = enc(c[0], c[1]);
+  const child = node.children.find(ch => firstMove(ch, node) === key);
+  if (child){ goTo(child); return; }
+  if (occupied(node.position, key)) return;
+  openEditor(node, c);
+});
+function occupied(pos, key){
+  for (let i = 0; i < pos.length; i += 2) if (pos.substr(i, 2) === key) return true;
+  return false;
+}
 
-    boardViewport.addEventListener('touchend', (event) => {
-      if (event.touches.length === 0) {
-        activeGesture = null;
-        ignoreUntilNoTouches = false;
-      }
-    });
-    boardViewport.addEventListener('touchcancel', () => {
-      activeGesture = null;
-      ignoreUntilNoTouches = false;
-    });
+$("btnPrev").onclick = () => { if (step > 0){ step--; renderMain(); } };
+$("btnNext").onclick = () => { if (step < cur().position.length/2){ step++; renderMain(); } };
+$("btnParent").onclick = goParent;
+$("btnDelete").onclick = () => {
+  if (path.length === 1) return;
+  const node = cur(), sub = countNodes(node) - 1;
+  const msg = sub ? `이 노드와 하위 노드 ${sub}개를 삭제합니다. 계속할까요?` : "이 노드를 삭제합니다. 계속할까요?";
+  if (!confirm(msg)) return;
+  const parent = path[path.length - 2];
+  parent.children.splice(parent.children.indexOf(node), 1);
+  setDirty(true);
+  goParent();
+};
+$("mainMemo").addEventListener("input", e => { cur().note = e.target.value; setDirty(true); });
 
-    let mousePan = null;
-    boardViewport.addEventListener('pointerdown', (event) => {
-      if (event.pointerType === 'touch' || mode !== 'edit') return;
-      const rect = boardViewport.getBoundingClientRect();
-      const p = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      mousePan = { anchorBoard: boardCoordFromViewport(p) };
-      boardViewport.setPointerCapture(event.pointerId);
-    });
-    boardViewport.addEventListener('pointermove', (event) => {
-      if (!mousePan || event.pointerType === 'touch') return;
-      const rect = boardViewport.getBoundingClientRect();
-      const p = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      transform.x = p.x - mousePan.anchorBoard.x * transform.scale;
-      transform.y = p.y - mousePan.anchorBoard.y * transform.scale;
-      clampTransform();
-      applyTransform();
-    });
-    boardViewport.addEventListener('pointerup', () => { mousePan = null; });
-    boardViewport.addEventListener('pointercancel', () => { mousePan = null; });
+/* ===================== 편집 화면 ===================== */
+function openEditor(parent, cell){
+  const moves = parsePos(parent.position);
+  edit = { parent, base: moves.length, moves: [...moves, cell] };
+  $("editMemo").value = "";
+  $("overlay").classList.add("open");
+  document.body.classList.add("locked");
+  $("overlay").scrollTop = 0;
+  renderEdit();
+}
+function closeEditor(){
+  edit = null;
+  $("overlay").classList.remove("open");
+  document.body.classList.remove("locked");
+}
+function editPosition(){ return edit.moves.map(([x,y]) => enc(x,y)).join(""); }
+function renderEdit(){
+  const b = buildBoard(edit.moves, edit.moves.length);
+  drawBoard($("editBoard"), { moves: edit.moves, shown: edit.moves.length, forbid: forbiddenSet(b) });
+  const added = edit.moves.length - edit.base;
+  $("editCount").textContent = `${edit.moves.length}수 (새로 둔 수 ${added})`;
+  $("editPos").textContent = editPosition();
+  $("btnUndo").disabled = added <= 1;
+}
+$("editBoard").addEventListener("click", e => {
+  if (!edit) return;
+  const c = cellFromEvent($("editBoard"), e);
+  if (!c) return;
+  if (edit.moves.some(([x,y]) => x === c[0] && y === c[1])) return;
+  edit.moves.push(c);
+  renderEdit();
+});
+$("btnUndo").onclick = () => {
+  if (edit && edit.moves.length - edit.base > 1){ edit.moves.pop(); renderEdit(); }
+};
+$("btnEditClose").onclick = () => {
+  const changed = edit.moves.length - edit.base > 1 || $("editMemo").value.trim() !== "";
+  if (changed && !confirm("저장하지 않고 닫으면 이 분기는 사라집니다. 닫을까요?")) return;
+  closeEditor();
+};
+$("btnEditSave").onclick = () => {
+  const child = { position: editPosition(), note: $("editMemo").value, children: [] };
+  edit.parent.children.push(child);
+  setDirty(true);
+  closeEditor();
+  goTo(child);
+};
 
-    modeToggle.addEventListener('click', () => {
-      mode = mode === 'edit' ? 'highlight' : 'edit';
-      updateModeUi();
-    });
+/* ===================== JSON 저장·불러오기 ===================== */
+$("btnSave").onclick = () => {
+  const blob = new Blob([JSON.stringify(root, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "omok-note.json";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  setDirty(false);
+};
+$("btnLoad").onclick = () => {
+  if (dirty && !confirm("저장하지 않은 변경이 사라집니다. 불러올까요?")) return;
+  $("fileInput").value = "";
+  $("fileInput").click();
+};
+$("fileInput").addEventListener("change", async e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  let data;
+  try { data = JSON.parse(await f.text()); }
+  catch { alert("JSON 형식이 올바르지 않아 불러오지 못했습니다."); return; }
+  const warnings = [];
+  let loaded;
+  try { loaded = normalize(data, null, warnings); }
+  catch (err){ alert("불러오지 못했습니다.\n" + err.message); return; }
+  root = loaded; path = [root]; step = 0;
+  $("mainMemo").value = root.note;
+  setDirty(false);
+  renderMain();
+  if (warnings.length) alert("불러왔지만 확인이 필요한 부분이 있습니다.\n\n" + warnings.slice(0, 10).join("\n") +
+    (warnings.length > 10 ? `\n외 ${warnings.length - 10}건` : ""));
+});
 
-    window.addEventListener('resize', resetInitialBoardView);
+function normalize(obj, parentPos, warnings){
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj))
+    throw new Error("노드가 객체 형식이 아닙니다.");
+  if (typeof obj.position !== "string") throw new Error("position이 문자열이 아닌 노드가 있습니다.");
+  const pos = obj.position.toUpperCase();
+  const label = pos || "(빈 판)";
+  if (pos.length % 2) throw new Error(`position 길이가 홀수입니다: ${label}`);
+  for (const ch of pos) if (!VALID.includes(ch)) throw new Error(`position에 1~F 이외의 문자가 있습니다: ${label}`);
+  const seen = new Set();
+  for (let i = 0; i < pos.length; i += 2){
+    const k = pos.substr(i, 2);
+    if (seen.has(k)) throw new Error(`같은 칸에 돌이 두 번 놓였습니다(${k}): ${label}`);
+    seen.add(k);
+  }
+  if (parentPos === null){
+    if (pos !== "") throw new Error("루트 노드의 position은 빈 문자열이어야 합니다.");
+  } else if (!pos.startsWith(parentPos) || pos.length <= parentPos.length){
+    throw new Error(`자식 노드가 부모 국면 이후의 국면이 아닙니다: ${label}`);
+  }
+  const note = typeof obj.note === "string" ? obj.note : (obj.note == null ? "" : String(obj.note));
+  const rawKids = obj.children == null ? [] : obj.children;
+  if (!Array.isArray(rawKids)) throw new Error(`children이 배열이 아닙니다: ${label}`);
+  const children = rawKids.map(c => normalize(c, pos, warnings));
+  const firsts = new Map();
+  for (const c of children){
+    const k = c.position.substr(pos.length, 2);
+    if (firsts.has(k)) warnings.push(`형제 노드의 첫 수가 겹칩니다(${k}): ${label}`);
+    else firsts.set(k, true);
+  }
+  return { position: pos, note, children };
+}
 
-    renderPalette();
-    updateModeUi();
-    requestAnimationFrame(resetInitialBoardView);
-  </script>
+window.addEventListener("beforeunload", e => { if (dirty){ e.preventDefault(); e.returnValue = ""; } });
+
+/* ===================== 시작 ===================== */
+$("mainMemo").value = root.note;
+renderMain();
+</script>
 </body>
 </html>
